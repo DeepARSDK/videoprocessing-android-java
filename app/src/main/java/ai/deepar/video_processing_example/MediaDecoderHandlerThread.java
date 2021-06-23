@@ -66,6 +66,22 @@ public class MediaDecoderHandlerThread extends HandlerThread {
 
     synchronized void setImageReceiver(DeepAR receiver) {
         this.imageReceiver = receiver;
+
+        this.imageReceiver.setFaceTrackedCallback(new DeepAR.FaceTrackedCallback() {
+            @Override
+            public void faceTracked(DeepAR.FaceData[] faceData) {
+
+            }
+        });
+    }
+
+    void finishDecode () {
+        if(decoder!=null) {
+            decoder.stop();
+            decoder.release();
+            extractor.release();
+            decoder = null;
+        }
     }
 
     void setFilenameAndStart(String inputFilename) {
@@ -131,22 +147,15 @@ public class MediaDecoderHandlerThread extends HandlerThread {
             }
             outputBufferIndex = decoder.dequeueOutputBuffer(info, 0);
             if (outputBufferIndex >= 0) {
-                if (info.flags != 0) {
+                if (info.flags == 4) {
                     Log.d("VideoDecode", "OutputBuffer BUFFER_FLAG_END_OF_STREAM");
-                    decoder.stop();
-                    decoder.release();
-                    extractor.release();
-                    decoder = null;
+                    finishDecode();
                     return;
                 }
                 ByteBuffer outputBuffer = decoder.getOutputBuffer(outputBufferIndex);
                 Image outputImage = decoder.getOutputImage(outputBufferIndex);
                 if(outputImage == null){
                     Log.d("VideoDecode", "OutputBuffer null");
-                    decoder.stop();
-                    decoder.release();
-                    extractor.release();
-                    decoder = null;
                     return;
                 }
 
@@ -169,12 +178,9 @@ public class MediaDecoderHandlerThread extends HandlerThread {
                 buffers[currentBuffer].put(byteData);
                 buffers[currentBuffer].position(0);
 
-                //SystemClock.sleep(100);
-
                 // Portrait videos recorder with the default Android camera will have a rotation of 270 degrees
                 // If you are using prepared videos with expected rotation, change orientation to 0
                 imageReceiver.receiveFrame(buffers[currentBuffer], outputImage.getWidth(), outputImage.getHeight(),270, false, DeepARImageFormat.YUV_420_888, outputImage.getPlanes()[1].getPixelStride());
-
                 decoder.releaseOutputBuffer(outputBufferIndex, false);
                 currentBuffer = ( currentBuffer + 1 ) % NUMBER_OF_BUFFERS;
                 outputImage.close();
